@@ -73,8 +73,6 @@ app.include_router(photos_router)
 def root():
     """Health check and API documentation endpoint"""
     return {
-        "status": "ok",
-        "message": "🚀 Google Services API is running!",
         "docs": "Visit /docs for interactive Swagger UI",
         "authentication": {
             "description": "Start here! Authenticate with Google OAuth",
