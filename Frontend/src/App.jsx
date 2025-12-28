@@ -14,7 +14,9 @@ const EvenetX = () => {
           <a href="#">Contact Us</a>
         </div>
         <div className="logo">EvenetX</div>
-        <div className="Login"></div>
+        <div className="Login">
+
+        </div>
       </nav>
 
       {/* Hero Section */}
@@ -45,24 +47,29 @@ const EvenetX = () => {
             </div>
             <div className='input-row'>
               <input type="text" placeholder="location" />
-                <button className="add-email-btn">Add</button>
+              <button className="add-email-btn">Add</button>
             </div>
             <button className="save-btn">Save </button>
           </div>
+          <section className='clock-section'>
+            <h2>Clock</h2>
+            <div className="card clock-card">
+              <iframe src="https://free.timeanddate.com/clock/ia7w4kyf/n54/tlin/fn7/fs20/fce9b36b/tct/pct/ftb/th2/ta1" frameborder="0" width="176" height="90" allowtransparency="true"></iframe>
+            </div>
+          </section>
         </section>
 
         <section className="card-section">
           <h2>Calendar</h2>
           <div className="card calendar-card">
-              <Calendar />
+            <Calendar />
           </div>
         </section>
-
         <section className="card-section full-width">
           <h2>Upcoming Event</h2>
           <div className="card upcoming-card">
             <div className="placeholder-content">
-              <span>Drag events here to schedule</span>
+              <span>No Event Created</span>
             </div>
           </div>
         </section>
