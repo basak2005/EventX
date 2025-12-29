@@ -1,8 +1,78 @@
-import React from 'react';
 import './App.css';
 import Calendar from './Calendar.jsx';
+import React, { useState, useEffect, useCallback } from 'react';
+import api from './api';
 
-const EvenetX = () => {
+
+
+
+const App = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [authError, setAuthError] = useState('');
+
+  const authBaseUrl = api.defaults.baseURL ?? 'http://localhost:8000';
+
+  // Check if user is authenticated and load their profile
+  const checkAuthStatus = useCallback(async () => {
+    setIsCheckingAuth(true);
+    setAuthError('');
+    try {
+      const statusRes = await api.get('/auth/status', { withCredentials: true });
+      console.log('Auth status response:', statusRes.data);
+      if (statusRes.data?.authenticated) {
+        try {
+          const userRes = await api.get('/user/me', { withCredentials: true });
+          const email = userRes.data?.email ?? '';
+          setUserEmail(email);
+          setIsAuthenticated(true);
+          return;
+        } catch (userErr) {
+          console.error('Fetching user profile failed:', userErr);
+          setAuthError(userErr.response?.data?.detail ?? 'Unable to load user profile');
+        }
+      }
+      setIsAuthenticated(false);
+      setUserEmail('');
+    } catch (error) {
+      console.error('Auth status check failed:', error);
+      setIsAuthenticated(false);
+      setUserEmail('');
+      setAuthError(error.response?.data?.detail ?? 'Authentication check failed');
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  }, []);
+
+  // Handle Google Login - redirect to FastAPI OAuth endpoint
+  const handleGoogleLogin = async () => {
+    // Redirect to your FastAPI Google OAuth endpoint
+    window.location.href = `${authBaseUrl}/auth/login`; 
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout', {}, { withCredentials: true });
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setAuthError(error.response?.data?.detail ?? 'Logout failed');
+    } finally {
+      setIsAuthenticated(false);
+      setUserEmail('');
+      checkAuthStatus();
+    }
+  };
+
+  useEffect(() => {
+    checkAuthStatus();
+  }, [checkAuthStatus]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // loadEvents(); - uncomment when function is defined
+    }
+  }, [isAuthenticated]);
   return (
     <div className="dashboard-container">
       {/* Navigation */}
@@ -15,7 +85,19 @@ const EvenetX = () => {
         </div>
         <div className="logo">EvenetX</div>
         <div className="Login">
-
+          {isCheckingAuth ? (
+            <span>Checking session...</span>
+          ) : isAuthenticated ? (
+            <div className="auth-status">
+              <span>{userEmail || 'Authenticated user'}</span>
+              <button className="login-btn" onClick={handleLogout}>Logout</button>
+            </div>
+          ) : (
+            <button className="login-btn" onClick={handleGoogleLogin}>Login with Google</button>
+          )}
+          {authError && !isCheckingAuth && (
+            <span className="auth-error">{authError}</span>
+          )}
         </div>
       </nav>
 
@@ -75,9 +157,9 @@ const EvenetX = () => {
         </section>
 
         <section className="card-section full-width">
-          <h2>Yours Notes</h2>
+          <h2>Yours Tasks</h2>
           <div className="card notes-card">
-            <textarea placeholder="Write your event notes here..."></textarea>
+            <textarea placeholder="Write your event Tasks here..."></textarea>
           </div>
         </section>
       </main>
@@ -100,4 +182,4 @@ const EvenetX = () => {
   );
 };
 
-export default EvenetX;
+export default App;
