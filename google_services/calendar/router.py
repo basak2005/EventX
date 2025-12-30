@@ -14,7 +14,7 @@ class CreateEventRequest(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     attendees: Optional[List[str]] = None  # List of email addresses
-    timezone: Optional[str] = "UTC"
+    timezone: Optional[str] = "IST"
 
 
 @router.get("/events")
@@ -40,7 +40,7 @@ def create_calendar_event(request: CreateEventRequest):
         description=request.description,
         location=request.location,
         attendees=request.attendees,
-        timezone=request.timezone or "ISO"
+        timezone=request.timezone or "IST"
     )
 
 
