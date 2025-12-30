@@ -1,6 +1,7 @@
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from datetime import datetime, timedelta
+from typing import Optional, List
 import uuid
 
 
@@ -25,6 +26,66 @@ def list_events(credentials: Credentials):
     ).execute()
 
     return events.get("items", [])
+
+
+def create_event(
+    credentials: Credentials,
+    summary: str,
+    start_datetime: str,
+    end_datetime: str,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+    attendees: Optional[List[str]] = None,
+    timezone: str = "UTC"
+):
+    """Create a calendar event
+    
+    Args:
+        credentials: Google OAuth credentials
+        summary: Event title
+        start_datetime: Start time in ISO format (e.g., "2025-12-31T10:00:00")
+        end_datetime: End time in ISO format (e.g., "2025-12-31T11:00:00")
+        description: Optional event description
+        location: Optional event location
+        attendees: Optional list of attendee email addresses
+        timezone: Timezone for the event (default: UTC)
+    
+    Returns:
+        Created event details
+    """
+    service = get_calendar_service(credentials)
+
+    event = {
+        "summary": summary,
+        "start": {"dateTime": start_datetime, "timeZone": timezone},
+        "end": {"dateTime": end_datetime, "timeZone": timezone},
+    }
+
+    if description:
+        event["description"] = description
+    
+    if location:
+        event["location"] = location
+    
+    if attendees:
+        event["attendees"] = [{"email": email} for email in attendees]
+
+    created_event = service.events().insert(
+        calendarId="primary",
+        body=event,
+        sendUpdates="all" if attendees else "none",
+    ).execute()
+
+    return {
+        "id": created_event.get("id"),
+        "summary": created_event.get("summary"),
+        "start": created_event.get("start"),
+        "end": created_event.get("end"),
+        "description": created_event.get("description"),
+        "location": created_event.get("location"),
+        "htmlLink": created_event.get("htmlLink"),
+        "attendees": created_event.get("attendees", [])
+    }
 
 
 def create_meet_event(credentials: Credentials, summary: str = "FastAPI Google Meet", duration_minutes: int = 60):
