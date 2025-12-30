@@ -40,7 +40,7 @@ def create_calendar_event(request: CreateEventRequest):
         description=request.description,
         location=request.location,
         attendees=request.attendees,
-        timezone=request.timezone or "UTC"
+        timezone=request.timezone or "ISO"
     )
 
 
