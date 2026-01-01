@@ -147,8 +147,8 @@ const App = () => {
     for (const url of endpointsToTry) {
       try {
         const res = await api.post(url, {
-          "title": "Task from EvenetX",
-          "notes": text,
+          "title": text,
+          "notes": "Completed via EvenetX",
           "task_list_id": "@default"
         }, { withCredentials: true });
         if (res && res.status >= 200 && res.status < 300) {
@@ -229,40 +229,63 @@ const App = () => {
                 return;
               }
               const fd = new FormData(e.currentTarget);
-              const title = (fd.get('title') || '').toString().trim();
-              let startDate = (fd.get('startDate') || '').toString();
-              let endDate = (fd.get('endDate') || '').toString();
-              const attendeesRaw = (fd.get('attendees') || '').toString();
+              const summary = (fd.get('summary') || '').toString().trim();
+              const description = (fd.get('description') || '').toString().trim();
               const location = (fd.get('location') || '').toString().trim();
+              const attendeesRaw = (fd.get('attendees') || '').toString();
+              const startDate = (fd.get('startDate') || '').toString();
+              const endDateInput = (fd.get('endDate') || '').toString();
+              const startTimeInput = (fd.get('startTime') || '').toString();
+              const endTimeInput = (fd.get('endTime') || '').toString();
 
-              if (!title || !startDate) {
-                alert('Please enter event title and start date.');
+              const normalizeTime = (value) => {
+                const trimmed = (value || '').toString().trim();
+                if (!trimmed) {
+                  return '00:00:00';
+                }
+                return trimmed.length === 5 ? `${trimmed}:00` : trimmed;
+              };
+
+              if (!summary || !startDate) {
+                alert('Please enter event summary and start date.');
                 return;
               }
 
-              if (!endDate) endDate = startDate;
-              if (endDate < startDate) endDate = startDate;
+              const startTime = normalizeTime(startTimeInput);
+              const startDateTime = `${startDate}T${startTime}`;
+
+              let endDate = endDateInput || startDate;
+              let endTime = normalizeTime(endTimeInput || startTimeInput);
+
+              const startInstant = new Date(`${startDate}T${startTime}`);
+              let endInstant = new Date(`${endDate}T${endTime}`);
+
+              if (Number.isNaN(startInstant.getTime())) {
+                alert('Please enter a valid start date and time.');
+                return;
+              }
+
+              if (Number.isNaN(endInstant.getTime()) || endInstant < startInstant) {
+                endDate = startDate;
+                endTime = startTime;
+                endInstant = new Date(`${endDate}T${endTime}`);
+              }
+
+              const endDateTime = `${endDate}T${endTime}`;
 
               const attendees = attendeesRaw
                 .split(/[,;\s]+/)
                 .map((e) => e.trim())
-                .filter(Boolean)
-                .map((email) => ({ email }));
+                .filter(Boolean);
 
               const eventPayload = {
-                title,
+                summary,
+                start_datetime: startDateTime,
+                end_datetime: endDateTime,
+                description,
                 location,
-                startDate,
-                endDate,
-                attendees: attendees.map(a => a.email),
-                // Common Google Calendar event shape
-                event: {
-                  summary: title,
-                  location,
-                  start: { date: startDate },
-                  end: { date: endDate },
-                  attendees,
-                },
+                attendees,
+                timezone: 'IST',
               };
 
               const endpointsToTry = [
@@ -281,7 +304,6 @@ const App = () => {
                   }
                 } catch (err) {
                   lastError = err;
-                  // try next endpoint
                 }
               }
 
@@ -299,21 +321,28 @@ const App = () => {
             }}
           >
             <div className="input-row">
-              <input name="title" type="text" placeholder="Event Title" />
+              <input name="summary" type="text" placeholder="Event Summary" />
             </div>
             <div className="input-row">
-              <span>Start Event:</span>
-              <input name="startDate" type="date" />
+              <span>StartEvent:</span>
+              <input className="startDate" name="startDate" type="date" style={{ width: '25%' }} />
+              <span>StartTime:</span>
+              <input className="startTime" name="startTime" type="time" />
             </div>
             <div className="input-row">
               <span>End Event:</span>
-              <input name="endDate" type="date" />
+              <input className="endDate" name="endDate" type="date" style={{ width: '25%' }} />
+              <span>End Time:</span>
+              <input className="endTime" name="endTime" type="time" />
+            </div>
+            <div className="input-row">
+              <input name="description" type="text" placeholder="Description" />
             </div>
             <div className="input-row">
               <input
                 name="attendees"
                 type="text"
-                placeholder="Attendee emails "
+                placeholder="Attendee emails"
                 title="You can add multiple emails separated by commas"
               />
             </div>
@@ -345,41 +374,131 @@ const App = () => {
           </div>
         </section>
 
-        <section className="card-section full-width">
+        <div className="card-section full-width">
           <h2>Upcoming Events</h2>
-          <div className="card upcoming-card">
-            <div className="placeholder-content">
-              {!isAuthenticated && <span>Login to see events</span>}
-              {isAuthenticated && (
-                <>
-                  {isLoadingEvents && <span>Loading...</span>}
-                  {!isLoadingEvents && eventsError && <span className="auth-error">{eventsError}</span>}
-                  {!isLoadingEvents && !eventsError && upcomingEvents.length === 0 && (
-                    <span>No events in the next 7 days</span>
-                  )}
-                  {!isLoadingEvents && !eventsError && upcomingEvents.length > 0 && (
-                    <div className="upcoming-events-list">
-                      {upcomingEvents.map(({ id, label }) => (
-                        <div key={id} className="event-line">{label}</div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+          <div className="eventmanegament">
+            <div className="card upcoming-card">
+              <div className="placeholder-content" style={{ marginBottom: '-2rem' }}>
+                {!isAuthenticated && <span>Login to see events</span>}
+                {isAuthenticated && (
+                  <>
+                    {isLoadingEvents && <span>Loading...</span>}
+                    {!isLoadingEvents && eventsError && <span className="auth-error">{eventsError}</span>}
+                    {!isLoadingEvents && !eventsError && upcomingEvents.length === 0 && (
+                      <span>No events in the next 7 days</span>
+                    )}
+                    {!isLoadingEvents && !eventsError && upcomingEvents.length > 0 && (
+                      <div className="upcoming-events-list">
+                        {upcomingEvents.map(({ id, label }) => (
+                          <div key={id} className="input-row">{label}</div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="buttionname" style={{ marginTop: '6px' }}>
+                <button
+                  type="button"
+                  className="save-btn"
+                  onClick={refreshUpcomingEvents}
+                  disabled={!isAuthenticated || isLoadingEvents}
+                  title={isAuthenticated ? 'Refresh events' : 'Login required'}
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
-            <div className="input-row" style={{ marginTop: '8px' }}>
-              <button
-                type="button"
-                className="save-btn"
-                onClick={refreshUpcomingEvents}
-                disabled={!isAuthenticated || isLoadingEvents}
-                title={isAuthenticated ? 'Refresh events' : 'Login required'}
-              >
-                Refresh
-              </button>
+            <div className='taskshow'>
+              <section className='TaskShow'>
+                <h2>Upcoming Task</h2>
+                <div className="card taskshow-card">
+                  <div id="tasks-container" className="upcoming-events-list" style={{ marginBottom: '8px' }}></div>
+                  <div className="buttion">
+                    <button
+                      type="button"
+                      className="save-btn"
+                      disabled={!isAuthenticated}
+                      title={isAuthenticated ? 'Refresh tasks' : 'Login required'}
+                      onClick={async () => {
+                        if (!isAuthenticated) {
+                          alert('Please login with Google first.');
+                          return;
+                        }
+                        try {
+                          const res = await api.get('/tasks/', { withCredentials: true });
+                          const tasks = res.data?.tasks ?? res.data ?? [];
+                          const container = document.getElementById('tasks-container');
+                          if (!container) return;
+                          container.innerHTML = '';
+                          if (!Array.isArray(tasks) || tasks.length === 0) {
+                            const empty = document.createElement('div');
+                            empty.className = 'input-row';
+                            empty.textContent = 'No tasks found';
+                            container.appendChild(empty);
+                            return;
+                          }
+                          tasks.forEach((t) => {
+                            const id = t?.id ?? t?.task_id ?? t?.taskId;
+                            const title = t?.title ?? t?.name ?? '(no title)';
+                            const completed = t?.status === 'completed' || t?.completed === true;
+
+                            const row = document.createElement('div');
+                            row.className = 'input-row';
+
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.checked = Boolean(completed);
+                            checkbox.title = checkbox.checked ? 'Mark as not done' : 'Mark as done';
+                            checkbox.onchange = async (ev) => {
+                              try {
+                                if (ev.target.checked) {
+                                  await api.post(`/tasks/${id}/complete`, {
+                                  }, { withCredentials: true });
+                                } else {
+                                  await api.patch(`/tasks/${id}`, { status: 'needsAction' }, { withCredentials: true });
+                                }
+                              } catch (error) {
+                                ev.target.checked = !ev.target.checked;
+                                alert(error.response?.data?.detail ?? error.message ?? 'Failed to update task');
+                              }
+                            };
+
+                            const label = document.createElement('span');
+                            label.style.margin = '0 8px';
+                            label.textContent = title;
+
+                            const del = document.createElement('button');
+                            del.className = 'save-btn';
+                            del.textContent = 'Delete';
+                            del.title = 'Delete task';
+                            del.onclick = async () => {
+                              try {
+                                await api.delete(`/tasks/${id}`, { withCredentials: true });
+                                row.remove();
+                              } catch (error) {
+                                alert(error.response?.data?.detail ?? error.message ?? 'Failed to delete task');
+                              }
+                            };
+
+                            row.appendChild(checkbox);
+                            row.appendChild(label);
+                            row.appendChild(del);
+                            container.appendChild(row);
+                          });
+                        } catch (error) {
+                          alert(error.response?.data?.detail ?? error.message ?? 'Failed to load tasks');
+                        }
+                      }}
+                    >
+                      Refresh Tasks
+                    </button>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
-        </section>
+        </div>
         <section className="card-section full-width">
           <h2>Your Tasks</h2>
           <div className="card notes-card">
@@ -432,7 +551,7 @@ const App = () => {
           </div>
         </div>
       </footer>
-    </div>
+    </div >
   );
 };
 
