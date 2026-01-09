@@ -118,8 +118,7 @@ def callback(code: str):
     # Persist to SQLite database
     save_credentials(credentials)
 
-    # Redirect to success page (backend endpoint)
-    return RedirectResponse(url="/auth/success")
+    return RedirectResponse(url="http://localhost:5173")
 
 
 @router.get("/success")

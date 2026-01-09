@@ -3,6 +3,10 @@ import Calendar from './Calendar.jsx';
 import React, { useState, useEffect, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFacebook, faInstagram, faSquareTwitter, faSquareLinkedin } from '@fortawesome/free-brands-svg-icons';
+import { faPhone, faMap, faCity, faLocationArrow, faEnvelope, faArrowPointer } from '@fortawesome/free-solid-svg-icons';
+import { faEnvelopeOpen, faCalendar, faFileLines, faCalendarCheck, faCalendarXmark } from '@fortawesome/free-regular-svg-icons';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import api from './api';
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -46,11 +50,21 @@ const App = () => {
         const id = t?.id ?? t?.task_id ?? t?.taskId;
         const title = t?.title ?? t?.name ?? '(no title)';
         const completed = t?.status === 'completed' || t?.completed === true;
+
         const row = document.createElement('div');
         row.className = 'input-row';
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+
         const label = document.createElement('span');
-        label.style.margin = '0 8px';
+        label.style.marginRight = '8px';
         label.textContent = title;
+
+        const actions = document.createElement('div');
+        actions.style.marginLeft = 'auto';
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+
         const checkbox = document.createElement('button');
         checkbox.className = 'save-btn';
         checkbox.textContent = completed ? 'Completed' : 'Task Done';
@@ -61,10 +75,13 @@ const App = () => {
             await api.put(`/tasks/${id}/complete`, {}, { withCredentials: true });
             checkbox.textContent = 'Completed';
             checkbox.disabled = true;
+            toast.success('Task marked as completed.');
           } catch (error) {
-            alert(error.response?.data?.detail ?? error.message ?? 'Failed to mark task as done');
+            const message = error.response?.data?.detail ?? error.message ?? 'Failed to mark task as done';
+            toast.error(message);
           }
         };
+
         const del = document.createElement('button');
         del.className = 'save-btn';
         del.textContent = 'Delete';
@@ -73,17 +90,23 @@ const App = () => {
           try {
             await api.delete(`/tasks/${id}`, { withCredentials: true });
             row.remove();
+            toast.success('Task deleted.');
           } catch (error) {
-            alert(error.response?.data?.detail ?? error.message ?? 'Failed to delete task');
+            const message = error.response?.data?.detail ?? error.message ?? 'Failed to delete task';
+            toast.error(message);
           }
         };
+
+        actions.appendChild(checkbox);
+        actions.appendChild(del);
+
         row.appendChild(label);
-        row.appendChild(checkbox);
-        row.appendChild(del);
+        row.appendChild(actions);
         container.appendChild(row);
       });
     } catch (error) {
-      alert(error.response?.data?.detail ?? error.message ?? 'Failed to load tasks');
+      const message = error.response?.data?.detail ?? error.message ?? 'Failed to load tasks';
+      toast.error(message);
     }
   }, [isAuthenticated]);
 
@@ -109,7 +132,9 @@ const App = () => {
           setProfilePicture(profilePictureUrl);
         } catch (userErr) {
           console.error('Fetching user profile failed:', userErr);
-          setAuthError(userErr.response?.data?.detail ?? 'Unable to load user profile');
+          const message = userErr.response?.data?.detail ?? 'Unable to load user profile';
+          setAuthError(message);
+          toast.error(message);
         }
         return;
       }
@@ -124,7 +149,9 @@ const App = () => {
       setUserEmail('');
       setProfilePicture('');
       setIsProfileMenuOpen(false);
-      setAuthError(error.response?.data?.detail ?? 'Authentication check failed');
+      const message = error.response?.data?.detail ?? 'Authentication check failed';
+      setAuthError(message);
+      toast.error(message);
     } finally {
       setIsCheckingAuth(false);
     }
@@ -141,9 +168,12 @@ const App = () => {
     setIsProfileMenuOpen(false);
     try {
       await api.post('/auth/logout', {}, { withCredentials: true });
+      toast.info('Logged out successfully.');
     } catch (error) {
       console.error('Logout failed:', error);
-      setAuthError(error.response?.data?.detail ?? 'Logout failed');
+      const message = error.response?.data?.detail ?? 'Logout failed';
+      setAuthError(message);
+      toast.error(message);
     } finally {
       setIsAuthenticated(false);
       setUserEmail('');
@@ -161,6 +191,47 @@ const App = () => {
 
   const closeProfileMenu = () => {
     setIsProfileMenuOpen(false);
+  };
+
+  const sanitizeSummaryText = (value) => {
+    const text = typeof value === 'string' ? value : String(value ?? '');
+    return text.replace(/[\*#]/g, '').replace(/\s+\n/g, '\n').trim();
+  };
+
+  const formatSummary = (value) => {
+    if (value == null) {
+      return 'No insight available.';
+    }
+    if (typeof value === 'string') {
+      return sanitizeSummaryText(value);
+    }
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => {
+          const line = formatSummary(item);
+          return line.includes('\n')
+            ? `- ${line.split('\n').join('\n  ')}`
+            : `- ${line}`;
+        })
+        .join('\n');
+    }
+    if (typeof value === 'object') {
+      return Object.entries(value)
+        .map(([key, val]) => {
+          const prettyKey = key.replace(/_/g, ' ');
+          const label = prettyKey.charAt(0).toUpperCase() + prettyKey.slice(1);
+          const formatted = formatSummary(val);
+          if (formatted.includes('\n')) {
+            return `${label}:\n${formatted
+              .split('\n')
+              .map((line) => (line ? `  ${line}` : line))
+              .join('\n')}`;
+          }
+          return `${label}: ${formatted}`;
+        })
+        .join('\n');
+    }
+    return sanitizeSummaryText(value);
   };
 
   useEffect(() => {
@@ -224,15 +295,18 @@ const App = () => {
       if (filtered.length === 0) {
         setUpcomingEvents([]);
         setEventsError('No events in the next 7 days');
+        toast.info('No events in the next 7 days.');
       } else {
         setUpcomingEvents(filtered);
         setEventsError('');
+        toast.success(`Loaded ${filtered.length} upcoming event${filtered.length === 1 ? '' : 's'}.`);
       }
     } catch (error) {
       console.error('Failed to load events:', error);
       const message = error.response?.data?.detail ?? error.message ?? 'Failed to load events';
       setUpcomingEvents([]);
       setEventsError(message);
+      toast.error(message);
     } finally {
       setIsLoadingEvents(false);
     }
@@ -241,16 +315,19 @@ const App = () => {
   const handleTaskSave = async () => {
     if (!isAuthenticated) {
       setTaskStatus('Please login with Google first.');
+      toast.error('Please login with Google first.');
       return;
     }
     const head = taskHeading.trim();
     const text = taskText.trim();//here is a trim and store only trimed text 
     if (!head) {
       setTaskStatus('Please enter a task headline.');
+      toast.warn('Please enter a task headline.');
       return;
     }
     if (!text) {
       setTaskStatus('Please enter a task.');
+      toast.warn('Please enter a task.');
       return;
     }
 
@@ -279,10 +356,12 @@ const App = () => {
       setTaskStatus('Task saved successfully.');
       setTaskText('');
       setTaskHeading('');
+      toast.success('Task saved successfully.');
       await loadTasks();
     } else {
       const msg = lastError?.response?.data?.detail ?? lastError?.message ?? 'Failed to save task';
       setTaskStatus(msg);
+      toast.error(msg);
     }
   };
 
@@ -308,6 +387,7 @@ const App = () => {
 
   return (
     <div className="dashboard-container">
+      <ToastContainer position="top-right" autoClose={4000} pauseOnHover />
       {/* Navigation */}
       <nav className="navbar">
         <div className="nav-links">
@@ -393,7 +473,7 @@ const App = () => {
             onSubmit={async (e) => {
               e.preventDefault();
               if (!isAuthenticated) {
-                alert('Please login with Google first.');
+                toast.error('Please login with Google first.');
                 return;
               }
               const fd = new FormData(e.currentTarget);
@@ -415,7 +495,7 @@ const App = () => {
               };
 
               if (!summary || !startDate) {
-                alert('Please enter event summary and start date.');
+                toast.warn('Please enter event summary and start date.');
                 return;
               }
 
@@ -429,7 +509,7 @@ const App = () => {
               let endInstant = new Date(`${endDate}T${endTime}`);
 
               if (Number.isNaN(startInstant.getTime())) {
-                alert('Please enter a valid start date and time.');
+                toast.warn('Please enter a valid start date and time.');
                 return;
               }
 
@@ -476,7 +556,7 @@ const App = () => {
               }
 
               if (created) {
-                alert('Event created successfully.');
+                toast.success('Event created successfully.');
                 e.currentTarget.reset();
                 await refreshUpcomingEvents();
               } else {
@@ -484,31 +564,32 @@ const App = () => {
                   lastError?.response?.data?.detail ||
                   lastError?.message ||
                   'Failed to create event';
-                alert(msg);
+                toast.error(msg);
 
               }
             }}
           >
             <div className="input-row">
+              <FontAwesomeIcon icon={faCalendar} />
               <input name="summary" type="text" placeholder="Event Summary" />
             </div>
             <div className="input-row">
-              <span>StartEvent:</span>
+              <FontAwesomeIcon icon={faCalendarCheck} /><span>StartEvent:</span>
               <input className="startDate" name="startDate" type="date" style={{ width: '25%' }} />
               <span>StartTime:</span>
               <input className="startTime" name="startTime" type="time" />
             </div>
             <div className="input-row">
-              <span>End Event:</span>
+              <FontAwesomeIcon icon={faCalendarCheck} /><span>End Event:</span>
               <input className="endDate" name="endDate" type="date" style={{ width: '25%' }} />
               <span>End Time:</span>
               <input className="endTime" name="endTime" type="time" />
             </div>
             <div className="input-row">
-              <input name="description" type="text" placeholder="Description" />
+              <FontAwesomeIcon icon={faFileLines} /><input name="description" type="text" placeholder="Description" />
             </div>
             <div className="input-row">
-              <input
+              <FontAwesomeIcon icon={faEnvelopeOpen} /><input
                 name="attendees"
                 type="text"
                 placeholder="Attendee emails"
@@ -516,7 +597,7 @@ const App = () => {
               />
             </div>
             <div className="input-row">
-              <input name="location" type="text" placeholder="Location" />
+              <FontAwesomeIcon icon={faLocationArrow} /><input name="location" type="text" placeholder="Location" />
             </div>
             <button className="save-btn" type="submit" disabled={!isAuthenticated} title={isAuthenticated ? 'Create event' : 'Login required'}>
               Save
@@ -550,6 +631,7 @@ const App = () => {
               <div className="placeholder-content" style={{ marginBottom: '-2rem' }}>
                 {!isAuthenticated && <span>Login to see events</span>}
                 {isAuthenticated && (
+
                   <>
                     {isLoadingEvents && <span>Loading...</span>}
                     {!isLoadingEvents && eventsError && <span className="auth-error">{eventsError}</span>}
@@ -635,11 +717,75 @@ const App = () => {
             </div>
           </div>
         </section>
-        <section>
-          <h2>Your Task Assistence</h2>
+        <section className="card-section full-width">
+          <h2>Your Task Assistance</h2>
           <div className="card ai-response-card">
-            <div className="placeholder-content">
-              <span>AI Task Assistence Coming Soon...</span>
+            <div
+              id="ai-summary-output"
+              className="placeholder-content"
+              style={{
+                whiteSpace: 'pre-wrap',
+                textAlign: 'left',
+                lineHeight: '1.6',
+                minHeight: '60px',
+                color: '#333',
+                fontSize: '0.95rem',
+                backgroundColor: '#f7f9ff',
+                border: '1px solid #dce3f5',
+                borderRadius: '10px',
+                padding: '16px',
+                boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
+                fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
+                transition: 'box-shadow 0.2s ease-in-out'
+              }}
+            >
+              <span>{isAuthenticated ? 'Ready to analyze your schedule.' : 'Login to access AI assistance.'}</span>
+            </div>
+            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="save-btn"
+                disabled={!isAuthenticated}
+                onClick={async (e) => {
+                  if (!isAuthenticated) return;
+                  const button = e.currentTarget;
+                  const output = document.getElementById('ai-summary-output');
+                  if (!output) return;
+
+                  const originalText = button.textContent;
+                  button.textContent = 'Analyzing...';
+                  button.disabled = true;
+                  output.innerHTML = '<i>Contacting AI services...</i>';
+
+                  try {
+                    const res = await api.get('/smart-summary', { withCredentials: true });
+                    const summary = res.data?.summary ?? res.data?.response ?? res.data ?? 'No insight available.';
+
+                    let formatted = summary;
+                    if (typeof formatted === 'string') {
+                      try {
+                        const parsed = JSON.parse(formatted);
+                        formatted = parsed;
+                      } catch (parseError) {
+                        // Leave formatted as string when JSON parsing fails.
+                      }
+                    }
+
+                    output.textContent = formatSummary(formatted);
+                    toast.success('AI Insight generated.');
+                  } catch (error) {
+                    console.error('AI Summary error:', error);
+                    const msg = error.response?.data?.detail ?? 'Failed to fetch AI summary.';
+                    output.textContent = msg;
+                    toast.error(msg);
+                  } finally {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                  }
+                }}
+              >
+                Get AI Insights
+              </button>
             </div>
           </div>
         </section>
@@ -650,7 +796,9 @@ const App = () => {
           <div className="socials">
             <ol>
               <ul>
-                <FontAwesomeIcon icon={faFacebook} style={{ height: '1.4rem' }} />Facebook</ul>
+                <FontAwesomeIcon icon={faFacebook} style={{ height: '1.4rem' }} /><a href='https://www.facebook.com/supradip888'>Facebook 
+                
+                </a></ul>
               <ul>
                 <FontAwesomeIcon icon={faInstagram} style={{ height: '1.4rem' }} />  Instagram
               </ul>
@@ -663,14 +811,19 @@ const App = () => {
 
           <div className="contact-info">
             <ol>
-              <ul>Email:supradiproy737@gmail.com</ul>
-              <ul>Phone:9831948452</ul>
-              <ul>Address:kolkta</ul>
-              <ul>Service</ul>
+              <ul><FontAwesomeIcon icon={faEnvelopeOpen} style={{ height: '1.4rem' }} />Email:supradiproy737@gmail.com</ul>
+              <ul><FontAwesomeIcon icon={faPhone} style={{ height: '1.4rem' }} />Phone:9831948452</ul>
+              <ul><FontAwesomeIcon icon={faCity} style={{ height: '1.4rem' }} />Address:kolkata</ul>
+              <ul><FontAwesomeIcon icon={faMap} style={{ height: '1.4rem' }} />Place:India</ul>
             </ol>
-          </div> 
-          <div className='conactform'>
-            
+          </div>
+          <div className='Services'>
+            <ol>
+              <ul><FontAwesomeIcon icon={faCalendarXmark} />Services</ul>
+              <ul><FontAwesomeIcon icon={faArrowPointer} />EventManagement</ul>
+              <ul><FontAwesomeIcon icon={faArrowPointer} />TaskManagement</ul>
+              <ul><FontAwesomeIcon icon={faArrowPointer} />AIAssistance</ul>
+            </ol>
           </div>
 
           <div className="footer-links">

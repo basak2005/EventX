@@ -247,6 +247,10 @@
   height: 40px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   margin-bottom: 30px;
+  display: flex;
+  flex-direction: collumn;
+  align-items: center;
+  gap: 3px;
 }
 .create-event-card .add-email-btn {
   margin-left: 5rem;
@@ -283,6 +287,7 @@
   color: gray;
   font-family: Zalando Sans SemiExpanded;
 }
+
 .upcoming-events-list span {
   font-size: large;
   font-style: oblique;
@@ -315,6 +320,7 @@
   flex-direction: column;
   color: #4a4a49;
 }
+
 .upcoming-card button {
   margin-top: 3rem;
   margin-left: 45%;
@@ -365,24 +371,47 @@ textarea {
 }
 .ai-response-card {
   margin-top: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
+.ai-response-card .placeholder-content {
+  width: 100%;
+  box-sizing: border-box;
+}
 
 /* Footer */
 .footer {
   background: #333;
   color: #d9c4a9;
-  padding: 40px;
+  padding: 30px;
+}
+.socials a {
+  color: #d9c4a9;
 }
 .footer-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.socials {
-  margin-left: 20%;
   font-size: 19px;
+}
+.Services {
+  margin-left: 30%;
+  display: flex;
+  flex-direction: column;
+}
+.Services ol ul {
+  list-style: none;
+  display: flex;
+  gap: 10px;
+  padding-bottom: 4px;
+  flex-direction: row;
+}
+.socials {
+  margin-left: 15%;
 }
 .socials ol ul {
   list-style: none;
@@ -392,17 +421,21 @@ textarea {
 }
 .contact-info ol ul {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   padding-left: 100%;
+  gap: 15px;
+  padding-bottom: 5px;
 }
 
-.footer-links{
-  padding-top: 11%;
+.footer-links {
+  margin-top: 10%;
   display: flex;
   flex-direction: row;
-  gap : 10px;
-  margin-right: 45%;
+  gap: 15px;
+  margin-left: auto;
+  margin-right: auto;
 }
+
 /* Responsive */
 @media (max-width: 768px) {
   .grid-layout {
