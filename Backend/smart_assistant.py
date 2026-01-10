@@ -143,71 +143,34 @@ def get_unread_emails(credentials: Credentials, max_results: int = 10) -> List[D
 
 
 def format_schedule_data(events: List[Dict], tasks: List[Dict], emails: List[Dict]) -> str:
-    """Format events, tasks, and emails into a readable string for Gemini"""
+    """Format events, tasks, and emails concisely for Gemini"""
     
-    output = "📅 UPCOMING CALENDAR EVENTS:\n"
-    output += "=" * 40 + "\n"
-    
+    output = "EVENTS:\n"
     if events:
-        for event in events:
-            summary = event.get('summary', 'Untitled Event')
-            start = event.get('start', {})
-            end = event.get('end', {})
-            start_time = start.get('dateTime', start.get('date', 'TBD'))
-            end_time = end.get('dateTime', end.get('date', ''))
-            description = event.get('description', '')
-            location = event.get('location', '')
-            
-            output += f"\n• {summary}\n"
-            output += f"  📆 Start: {start_time}\n"
-            if end_time:
-                output += f"  ⏰ End: {end_time}\n"
-            if location:
-                output += f"  📍 Location: {location}\n"
-            if description:
-                output += f"  📝 Notes: {description[:100]}...\n" if len(description) > 100 else f"  📝 Notes: {description}\n"
+        for event in events[:10]:  # Limit to 10 events
+            summary = event.get('summary', 'Untitled')
+            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', 'TBD'))
+            output += f"- {summary} | {start}\n"
     else:
-        output += "No upcoming events scheduled.\n"
+        output += "None\n"
     
-    output += "\n\n✅ PENDING TASKS:\n"
-    output += "=" * 40 + "\n"
-    
+    output += "\nTASKS:\n"
     if tasks:
-        for task in tasks:
-            title = task.get('title', 'Untitled Task')
-            notes = task.get('notes', '')
-            due = task.get('due', '')
-            list_name = task.get('listName', 'Default')
-            
-            output += f"\n• {title}\n"
-            output += f"  📋 List: {list_name}\n"
-            if due:
-                output += f"  📅 Due: {due}\n"
-            if notes:
-                output += f"  📝 Notes: {notes[:100]}...\n" if len(notes) > 100 else f"  📝 Notes: {notes}\n"
+        for task in tasks[:10]:  # Limit to 10 tasks
+            title = task.get('title', 'Untitled')
+            due = task.get('due', 'No due date')
+            output += f"- {title} | Due: {due}\n"
     else:
-        output += "No pending tasks.\n"
+        output += "None\n"
     
-    output += "\n\n📧 UNREAD EMAILS (Potential Tasks/Action Items):\n"
-    output += "=" * 40 + "\n"
-    
+    output += "\nEMAILS:\n"
     if emails:
-        for email in emails:
-            sender = email.get('from', 'Unknown')
-            subject = email.get('subject', 'No Subject')
-            date = email.get('date', '')
-            snippet = email.get('snippet', '')
-            body = email.get('body', '')
-            
-            output += f"\n• From: {sender}\n"
-            output += f"  📌 Subject: {subject}\n"
-            output += f"  📆 Date: {date}\n"
-            if snippet:
-                output += f"  💬 Preview: {snippet[:150]}...\n" if len(snippet) > 150 else f"  💬 Preview: {snippet}\n"
-            if body:
-                output += f"  📄 Content: {body[:300]}...\n" if len(body) > 300 else f"  📄 Content: {body}\n"
+        for email in emails[:10]:  # Limit to 10 emails
+            sender = email.get('from', 'Unknown')[:30]
+            subject = email.get('subject', 'No Subject')[:50]
+            output += f"- {sender}: {subject}\n"
     else:
-        output += "No unread emails.\n"
+        output += "None\n"
     
     return output
 
@@ -233,64 +196,37 @@ def get_smart_summary(credentials: Credentials, user_context: Optional[str] = No
     # Format data for Gemini
     schedule_data = format_schedule_data(events, tasks, emails)
     
-    # Gemini system instruction
-    system_instruction = """You are an expert productivity coach and time management specialist.
+    # Gemini system instruction - kept concise to reduce token usage
+    system_instruction = """You are a productivity assistant. Be VERY concise.
 
-Your job is to analyze the user's calendar events, tasks, AND unread emails, then provide:
+Provide output in this exact format:
 
-1. **📊 SUMMARY** (2-3 sentences)
-   - Brief overview of their schedule load
-   - Key highlights and important deadlines
-   - Note any urgent emails requiring action
+**📧 EMAILS** (max 5 items)
+• [Sender]: [Action needed] - [Urgent/Normal]
 
-2. **🎯 PRIORITIZED TASK ORDER** 
-   - List tasks in the ORDER they should be completed
-   - Include both explicit tasks AND action items from emails
-   - Consider: urgency, importance, dependencies, and calendar conflicts
-   - Use this format: 
-     1. [TASK NAME] - Why this order (brief reason)
-     2. [TASK NAME] - Why this order
-     ...
+**📅 MEETINGS** (max 5 items)
+• [Time] - [Event name] - [Duration]
 
-3. **📧 EMAIL ACTION ITEMS**
-   - Identify emails that contain tasks, requests, or pending work from clients
-   - Extract specific action items from email content
-   - Flag urgent client requests that need immediate attention
-   - Format:
-     • [SENDER]: [ACTION REQUIRED] - Priority level
+**✅ TASKS** (max 5 items)
+• [Task] - [Due date if any]
 
-4. **⚡ TODAY'S FOCUS** (if applicable)
-   - Top 3 things to accomplish today
-   - Include urgent email responses if needed
-   - Realistic time estimates
+**⚡ TOP 3 PRIORITIES**
+1. [Most important action]
+2. [Second priority]
+3. [Third priority]
 
-5. **💡 SMART RECOMMENDATIONS**
-   - Time blocking suggestions
-   - Tasks that can be batched together
-   - Emails that can be replied in batch
-   - Potential scheduling conflicts to watch out for
-   - Energy management tips (when to do deep work vs. light tasks)
+Rules:
+- One line per item, no extra explanation
+- Skip sections if empty
+- Max 150 words total"""
 
-6. **⚠️ WARNINGS** (if any)
-   - Overcommitment alerts
-   - Deadline risks
-   - Urgent client emails awaiting response
-   - Missing information (tasks without due dates, etc.)
+    # Build the prompt - kept minimal
+    prompt = f"""Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-Be concise, actionable, and encouraging. Use bullet points and emojis for easy scanning.
-Focus on WHAT to do and WHEN to do it.
-Pay special attention to client emails that may contain pending work or requests."""
-
-    # Build the prompt
-    prompt = f"""Please analyze my schedule and tasks, then give me a smart summary with prioritized recommendations.
-
-Current Date/Time: {datetime.now().strftime('%A, %B %d, %Y at %I:%M %p')}
-
-{schedule_data}
-"""
+{schedule_data}"""
     
     if user_context:
-        prompt += f"\n\nAdditional context from user: {user_context}"
+        prompt += f"\nContext: {user_context}"
     
     # Generate AI response
     config = types.GenerateContentConfig(system_instruction=system_instruction)
