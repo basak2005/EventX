@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, Cookie
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from typing import Optional
 import os
+import secrets
 from auth.router import router as auth_router, get_credentials
 from auth.dependencies import require_session
 from google_services.calendar.router import router as calendar_router
@@ -41,22 +43,40 @@ app = FastAPI(
 )
 
 # Get allowed origins from environment
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://eventx-frontend-murex.vercel.app")
+
+# Check if we're in production (HTTPS)
+IS_PRODUCTION = os.getenv("VERCEL_ENV") is not None or FRONTEND_URL.startswith("https://")
 
 # Parse multiple origins if needed
 allowed_origins = [
     FRONTEND_URL,
+    "https://eventx-frontend-murex.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
 ]
 
-# CORS for frontend integration
+# Session secret key - use environment variable in production
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+
+# Add SessionMiddleware FIRST (before CORS) for cross-site cookies
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY,
+    session_cookie="session",
+    max_age=60 * 60 * 24 * 7,  # 7 days
+    same_site="none" if IS_PRODUCTION else "lax",
+    https_only=IS_PRODUCTION,
+)
+
+# CORS for frontend integration - with explicit settings for cross-origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "Cookie", "X-Requested-With", "Accept"],
+    expose_headers=["Set-Cookie"],
 )
 
 # Include all routers

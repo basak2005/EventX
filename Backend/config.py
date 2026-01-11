@@ -13,8 +13,8 @@ GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Dynamic redirect URI based on environment
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://backend-five-self-11.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://eventx-frontend-murex.vercel.app")
 
 GOOGLE_REDIRECT_URI = f"{BACKEND_URL}/auth/callback"
 

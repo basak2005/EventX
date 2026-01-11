@@ -21,6 +21,19 @@ os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 # Session cookie name
 SESSION_COOKIE_NAME = "session_id"
 
+# Check if we're in production (HTTPS)
+IS_PRODUCTION = os.getenv("VERCEL_ENV") is not None or FRONTEND_URL.startswith("https://")
+
+def get_cookie_settings():
+    """Get cookie settings based on environment for cross-site cookies"""
+    return {
+        "httponly": True,
+        "secure": IS_PRODUCTION,  # True for HTTPS
+        "samesite": "none" if IS_PRODUCTION else "lax",  # 'none' for cross-site
+        "path": "/",
+        "max_age": 60 * 60 * 24 * 7,  # 7 days
+    }
+
 # In-memory cache per session (for serverless, this resets, so we rely on MongoDB)
 credentials_cache = {}
 
@@ -95,6 +108,7 @@ router = APIRouter()
 def login(
     redirect: bool = True, 
     force: bool = False,
+    response: Response = None,
     session_id: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME)
 ):
     """
@@ -109,10 +123,19 @@ def login(
         creds = get_credentials(session_id)
         if creds and not creds.expired:
             if redirect:
-                return RedirectResponse(url=f"{FRONTEND_URL}?authenticated=true")
+                redirect_response = RedirectResponse(url=f"{FRONTEND_URL}?authenticated=true")
+                # Refresh the cookie with proper settings
+                cookie_settings = get_cookie_settings()
+                redirect_response.set_cookie(
+                    key=SESSION_COOKIE_NAME,
+                    value=session_id,
+                    **cookie_settings
+                )
+                return redirect_response
             return {
                 "message": "Already authenticated!",
                 "authenticated": True,
+                "session_id": session_id,
                 "hint": "Use /auth/login?force=true to re-authenticate"
             }
     
@@ -179,10 +202,23 @@ def callback(code: str, state: str, response: Response):
         # Persist to MongoDB database with session ID as key
         save_credentials(credentials, session_id)
         
-        # Redirect to frontend with session_id in URL (token-based auth for cross-origin)
-        # Frontend should store this in localStorage and send via Authorization header
-        redirect_url = f"{FRONTEND_URL}?session_id={session_id}"
-        return RedirectResponse(url=redirect_url)
+        # Create redirect response to frontend
+        redirect_url = f"{FRONTEND_URL}?session_id={session_id}&authenticated=true"
+        redirect_response = RedirectResponse(url=redirect_url, status_code=302)
+        
+        # Set the session cookie with proper cross-site settings BEFORE redirect
+        cookie_settings = get_cookie_settings()
+        redirect_response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=session_id,
+            **cookie_settings
+        )
+        
+        return redirect_response
+        
+    except Exception as e:
+        print(f"❌ OAuth callback error: {e}")
+        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
         
     except Exception as e:
         print(f"❌ OAuth callback error: {e}")
@@ -243,8 +279,14 @@ def logout(
         # Remove from database
         delete_credentials(session_id)
     
-    # Clear the session cookie
-    response.delete_cookie(key=SESSION_COOKIE_NAME)
+    # Clear the session cookie with proper cross-site settings
+    cookie_settings = get_cookie_settings()
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path=cookie_settings["path"],
+        secure=cookie_settings["secure"],
+        samesite=cookie_settings["samesite"],
+    )
     
     return {"message": "Logged out successfully"}
 
@@ -253,5 +295,48 @@ def logout(
 def list_users():
     """List all authenticated users (admin endpoint)"""
     return {"users": get_all_users()}
+
+
+@router.post("/set-session")
+def set_session(response: Response, session_id: str):
+    """
+    Set session cookie from session_id (for frontend to call after OAuth redirect).
+    This is useful when the frontend receives the session_id in the URL and needs
+    to set it as a proper cross-site cookie.
+    """
+    # Verify the session_id is valid
+    creds = get_credentials(session_id)
+    if not creds:
+        raise HTTPException(status_code=401, detail="Invalid session_id")
+    
+    # Set the session cookie with proper cross-site settings
+    cookie_settings = get_cookie_settings()
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        **cookie_settings
+    )
+    
+    user_email = get_user_email_from_credentials(creds)
+    return {
+        "message": "Session cookie set successfully",
+        "authenticated": True,
+        "user_email": user_email,
+    }
+
+
+@router.get("/cookie-test")
+def cookie_test(
+    response: Response,
+    session_cookie: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
+):
+    """Debug endpoint to test cookie settings"""
+    cookie_settings = get_cookie_settings()
+    return {
+        "received_session_cookie": session_cookie,
+        "cookie_settings": cookie_settings,
+        "is_production": IS_PRODUCTION,
+        "frontend_url": FRONTEND_URL,
+    }
 
 
