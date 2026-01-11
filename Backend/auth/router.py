@@ -8,6 +8,7 @@ from config import (
     GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI,
     SCOPES,
+    FRONTEND_URL,
 )
 from database import save_credentials, load_credentials, delete_credentials, get_all_users
 
@@ -15,6 +16,7 @@ from database import save_credentials, load_credentials, delete_credentials, get
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
 # In-memory cache (loaded from DB on startup)
+# Note: In serverless, this resets per invocation, so we rely on MongoDB
 credentials_store = {}
 
 def get_credentials():
@@ -95,30 +97,35 @@ def callback(code: str):
     """
     OAuth callback - Google redirects here with authorization code
     """
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        },
-        scopes=SCOPES,
-    )
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=SCOPES,
+        )
 
-    flow.redirect_uri = GOOGLE_REDIRECT_URI
-    flow.fetch_token(code=code)
+        flow.redirect_uri = GOOGLE_REDIRECT_URI
+        flow.fetch_token(code=code)
 
-    credentials = flow.credentials
-    
-    # Store in memory cache
-    credentials_store["credentials"] = credentials
-    
-    # Persist to SQLite database
-    save_credentials(credentials)
+        credentials = flow.credentials
+        
+        # Store in memory cache
+        credentials_store["credentials"] = credentials
+        
+        # Persist to MongoDB database
+        save_credentials(credentials)
 
-    return RedirectResponse(url="http://localhost:5173")
+        # Redirect to frontend URL (from environment)
+        return RedirectResponse(url=FRONTEND_URL)
+    except Exception as e:
+        print(f"❌ OAuth callback error: {e}")
+        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
 
 
 @router.get("/success")

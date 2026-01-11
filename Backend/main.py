@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
+import os
 from auth.router import router as auth_router, get_credentials
 from google_services.calendar.router import router as calendar_router
 from google_services.tasks.router import router as tasks_router
@@ -38,10 +39,20 @@ app = FastAPI(
     version="2.2.0"
 )
 
+# Get allowed origins from environment
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Parse multiple origins if needed
+allowed_origins = [
+    FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
 # CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,8 +76,28 @@ def root():
     return {
         "message": "🧠 Google Services API with Smart Assistant",
         "docs": "/docs",
-        "smart_assistant": "GET /smart-summary - AI-powered task analysis & prioritization"
+        "smart_assistant": "GET /smart-summary - AI-powered task analysis & prioritization",
+        "environment": os.getenv("VERCEL_ENV", "development")
     }
+
+
+@app.get("/debug/config", tags=["Debug"])
+def debug_config():
+    """Debug endpoint to check configuration (no sensitive data exposed)"""
+    mongodb_uri = os.getenv("MONGODB_URI", "")
+    return {
+        "mongodb_configured": bool(mongodb_uri and mongodb_uri != "mongodb://localhost:27017"),
+        "mongodb_uri_prefix": mongodb_uri[:20] + "..." if len(mongodb_uri) > 20 else "not set or localhost",
+        "frontend_url": os.getenv("FRONTEND_URL", "not set"),
+        "google_client_id_set": bool(os.getenv("GOOGLE_CLIENT_ID")),
+        "google_client_secret_set": bool(os.getenv("GOOGLE_CLIENT_SECRET")),
+        "google_redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "not set"),
+        "vercel_env": os.getenv("VERCEL_ENV", "not set"),
+    }
+
+
+# Vercel serverless handler
+handler = app
 
 
 @app.get("/smart-summary", tags=["🧠 Smart Assistant"])
