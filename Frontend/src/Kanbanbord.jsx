@@ -9,6 +9,7 @@ const KANBAN_STORAGE_KEY = 'kanban_board_data';
 const saveToLocalStorage = (data) => {
   try {
     localStorage.setItem(KANBAN_STORAGE_KEY, JSON.stringify(data));
+    console.log('Kanban data saved to localStorage');
   } catch (error) {
     console.error('Error saving to localStorage:', error);
   }
@@ -17,7 +18,11 @@ const saveToLocalStorage = (data) => {
 const loadFromLocalStorage = () => {
   try {
     const data = localStorage.getItem(KANBAN_STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
+    if (data) {
+      console.log('Kanban data loaded from localStorage');
+      return JSON.parse(data);
+    }
+    return null;
   } catch (error) {
     console.error('Error loading from localStorage:', error);
     return null;
@@ -75,19 +80,19 @@ const KanbanBoard = ({ isAuthenticated: propIsAuthenticated }) => {
     }
   }, [propIsAuthenticated]);
 
-  // Auto-sync every 5 minutes
+  // Auto-sync every 1 hour
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const interval = setInterval(() => {
-      console.log('Auto-syncing Kanban data...');
+      console.log('Auto-syncing Kanban data (1 hour interval)...');
       fetchFromAPI();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 60 * 60 * 1000); // 1 hour
 
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  // Listen for custom events when tasks/events are added from other components
+  // Listen for custom events when tasks/events are added, deleted, or completed from other components
   useEffect(() => {
     const handleTaskAdded = () => {
       console.log('Task added event received, syncing...');
@@ -99,12 +104,33 @@ const KanbanBoard = ({ isAuthenticated: propIsAuthenticated }) => {
       fetchFromAPI();
     };
 
+    const handleTaskCompleted = () => {
+      console.log('Task completed event received, syncing...');
+      fetchFromAPI();
+    };
+
+    const handleTaskDeleted = () => {
+      console.log('Task deleted event received, syncing...');
+      fetchFromAPI();
+    };
+
+    const handleEventDeleted = () => {
+      console.log('Event deleted event received, syncing...');
+      fetchFromAPI();
+    };
+
     window.addEventListener('kanban-task-added', handleTaskAdded);
     window.addEventListener('kanban-event-added', handleEventAdded);
+    window.addEventListener('kanban-task-completed', handleTaskCompleted);
+    window.addEventListener('kanban-task-deleted', handleTaskDeleted);
+    window.addEventListener('kanban-event-deleted', handleEventDeleted);
 
     return () => {
       window.removeEventListener('kanban-task-added', handleTaskAdded);
       window.removeEventListener('kanban-event-added', handleEventAdded);
+      window.removeEventListener('kanban-task-completed', handleTaskCompleted);
+      window.removeEventListener('kanban-task-deleted', handleTaskDeleted);
+      window.removeEventListener('kanban-event-deleted', handleEventDeleted);
     };
   }, []);
 
@@ -175,22 +201,74 @@ const KanbanBoard = ({ isAuthenticated: propIsAuthenticated }) => {
         originalId: task.id
       }));
 
-      const newColumns = {
-        todo: {
-          title: 'To Do',
-          items: [...calendarItems, ...todoTasks]
-        },
-        inProgress: {
-          title: 'In Progress',
-          items: []
-        },
-        done: {
-          title: 'Done',
-          items: doneTasks
-        }
-      };
+      // Load saved data to preserve column positions
+      const savedData = loadFromLocalStorage();
 
-      setColumns(newColumns);
+      if (savedData && savedData.todo && savedData.inProgress && savedData.done) {
+        // Get all saved item IDs by column
+        const savedItemIds = {
+          todo: new Set(savedData.todo.items.map(i => i.id)),
+          inProgress: new Set(savedData.inProgress.items.map(i => i.id)),
+          done: new Set(savedData.done.items.map(i => i.id))
+        };
+
+        // All new items from API
+        const allNewItems = [...calendarItems, ...todoTasks, ...doneTasks];
+        const allNewItemIds = new Set(allNewItems.map(i => i.id));
+
+        // Keep items in their saved columns if they still exist in API
+        const mergedColumns = {
+          todo: {
+            title: 'To Do',
+            items: [
+              // Keep saved items that still exist
+              ...savedData.todo.items.filter(item => allNewItemIds.has(item.id)),
+              // Add new items not in any saved column
+              ...allNewItems.filter(item =>
+                !savedItemIds.todo.has(item.id) &&
+                !savedItemIds.inProgress.has(item.id) &&
+                !savedItemIds.done.has(item.id)
+              )
+            ]
+          },
+          inProgress: {
+            title: 'In Progress',
+            items: savedData.inProgress.items.filter(item => allNewItemIds.has(item.id))
+          },
+          done: {
+            title: 'Done',
+            items: [
+              // Keep saved done items that still exist
+              ...savedData.done.items.filter(item => allNewItemIds.has(item.id)),
+              // Add newly completed tasks
+              ...doneTasks.filter(item =>
+                !savedItemIds.todo.has(item.id) &&
+                !savedItemIds.inProgress.has(item.id) &&
+                !savedItemIds.done.has(item.id)
+              )
+            ]
+          }
+        };
+
+        setColumns(mergedColumns);
+      } else {
+        // No saved data, use fresh API data
+        const newColumns = {
+          todo: {
+            title: 'To Do',
+            items: [...calendarItems, ...todoTasks]
+          },
+          inProgress: {
+            title: 'In Progress',
+            items: []
+          },
+          done: {
+            title: 'Done',
+            items: doneTasks
+          }
+        };
+        setColumns(newColumns);
+      }
     } catch (error) {
       console.error("Error fetching Kanban data:", error);
       if (error.response && error.response.status === 401) {

@@ -80,6 +80,8 @@ const App = () => {
             checkbox.textContent = 'Completed';
             checkbox.disabled = true;
             toast.success('Task marked as completed.');
+            // Trigger Kanban sync
+            window.dispatchEvent(new CustomEvent('kanban-task-completed'));
           } catch (error) {
             const message = error.response?.data?.detail ?? error.message ?? 'Failed to mark task as done';
             toast.error(message);
@@ -95,6 +97,8 @@ const App = () => {
             await api.delete(`/tasks/${id}`, { withCredentials: true });
             row.remove();
             toast.success('Task deleted.');
+            // Trigger Kanban sync
+            window.dispatchEvent(new CustomEvent('kanban-task-deleted'));
           } catch (error) {
             const message = error.response?.data?.detail ?? error.message ?? 'Failed to delete task';
             toast.error(message);
@@ -273,7 +277,7 @@ const App = () => {
       const events = res.data?.events ?? res.data ?? [];
       const now = new Date();
       const end = new Date(now);
-      end.setDate(end.getDate() + 15);
+      end.setDate(end.getDate() + 31);
 
       const filtered = events
         .map((event) => {
@@ -303,7 +307,7 @@ const App = () => {
       setEventsError('');
 
       if (filtered.length === 0) {
-        toast.info('No events in the next 15 days.');
+        toast.info('No events in the next month.');
       } else {
         toast.success(`Loaded ${filtered.length} upcoming event${filtered.length === 1 ? '' : 's'}.`);
       }
@@ -405,6 +409,25 @@ const App = () => {
     setEventSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
   };
 
+  const deleteEvent = async (eventId) => {
+    if (!isAuthenticated) {
+      toast.error('Please login first.');
+      return;
+    }
+    try {
+      await api.delete(`/calendar/events/${eventId}`, { withCredentials: true });
+      toast.success('Event deleted successfully.');
+      // Refresh the events list
+      refreshUpcomingEvents();
+      // Trigger Kanban sync
+      window.dispatchEvent(new CustomEvent('kanban-event-deleted'));
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+      const message = error.response?.data?.detail ?? error.message ?? 'Failed to delete event';
+      toast.error(message);
+    }
+  };
+
   const userInitial = (userName || userEmail || '?').charAt(0).toUpperCase();
 
   return (
@@ -497,11 +520,12 @@ const App = () => {
                 className="card create-event-card"
                 onSubmit={async (e) => {
                   e.preventDefault();
+                  const form = e.currentTarget;
                   if (!isAuthenticated) {
                     toast.error('Please login with Google first.');
                     return;
                   }
-                  const fd = new FormData(e.currentTarget);
+                  const fd = new FormData(form);
                   const summary = (fd.get('summary') || '').toString().trim();
                   const description = (fd.get('description') || '').toString().trim();
                   const location = (fd.get('location') || '').toString().trim();
@@ -582,10 +606,11 @@ const App = () => {
 
                   if (created) {
                     toast.success('Event created successfully.');
-                    e.currentTarget.reset();
+                    form.reset();
                     setEventSearchQuery('');
                     setEventSortOrder('asc');
-                    await refreshUpcomingEvents();
+                    // Auto-refresh upcoming events list
+                    refreshUpcomingEvents();
                     // Trigger Kanban sync
                     window.dispatchEvent(new CustomEvent('kanban-event-added'));
                   } else {
@@ -683,13 +708,22 @@ const App = () => {
                               </button>
                             </div>
                             {!hasEvents ? (
-                              <span>No events in the next 15 days</span>
+                              <span>No events in the next month</span>
                             ) : !hasVisibleEvents ? (
                               <span>No events match your search.</span>
                             ) : (
                               <div className="upcoming-events-list">
                                 {visibleEvents.map(({ id, label }) => (
-                                  <div key={id} className="input-row">{label}</div>
+                                  <div key={id} className="input-row">
+                                    <span>{label}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteEvent(id)}
+                                      title="Delete event"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
                                 ))}
                               </div>
                             )}

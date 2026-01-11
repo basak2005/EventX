@@ -11,16 +11,22 @@ def get_calendar_service(credentials: Credentials):
 
 
 def list_events(credentials: Credentials):
-    """List upcoming calendar events"""
+    """List upcoming calendar events for the current month"""
     service = get_calendar_service(credentials)
     
     # Get events starting from now
-    now = datetime.utcnow().isoformat() + "Z"
+    now = datetime.utcnow()
+    now_iso = now.isoformat() + "Z"
+    
+    # Get events until end of current month + next month (approx 60 days)
+    end_date = now + timedelta(days=60)
+    end_iso = end_date.isoformat() + "Z"
 
     events = service.events().list(
         calendarId="primary",
-        timeMin=now,
-        maxResults=10,
+        timeMin=now_iso,
+        timeMax=end_iso,
+        maxResults=250,  # Increased to get all month events
         singleEvents=True,
         orderBy="startTime",
     ).execute()
