@@ -59,6 +59,7 @@ def init_db():
 
 def save_credentials(credentials: Any, user_email: str = "default"):
     """Save OAuth credentials to MongoDB"""
+    ensure_initialized()
     try:
         db = get_database()
         
@@ -92,7 +93,7 @@ def save_credentials(credentials: Any, user_email: str = "default"):
 def load_credentials(user_email: str = "default") -> Any:
     """Load OAuth credentials from MongoDB"""
     from google.oauth2.credentials import Credentials
-    
+    ensure_initialized()
     try:
         db = get_database()
         
@@ -121,6 +122,7 @@ def load_credentials(user_email: str = "default") -> Any:
 
 def delete_credentials(user_email: str = "default"):
     """Delete OAuth credentials from MongoDB"""
+    ensure_initialized()
     try:
         db = get_database()
         db.oauth_tokens.delete_one({"user_email": user_email})
@@ -132,6 +134,7 @@ def delete_credentials(user_email: str = "default"):
 
 def get_all_users():
     """Get all users with stored credentials"""
+    ensure_initialized()
     try:
         db = get_database()
         cursor = db.oauth_tokens.find(
@@ -151,8 +154,17 @@ def get_all_users():
         return []
 
 
-# Initialize database on module import (lazy initialization for serverless)
-try:
-    init_db()
-except Exception as e:
-    print(f"⚠️ Database initialization deferred: {e}")
+# Lazy initialization for serverless - don't call init_db() at import time
+# Database will be initialized on first actual database operation
+_initialized = False
+
+
+def ensure_initialized():
+    """Ensure database is initialized (called lazily on first operation)"""
+    global _initialized
+    if not _initialized:
+        try:
+            init_db()
+            _initialized = True
+        except Exception as e:
+            print(f"⚠️ Database initialization warning: {e}")
