@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from auth.router import get_credentials
-from google_services.calendar_service import list_events, create_meet_event, create_event
+from google_services.calendar_service import list_events, create_meet_event, create_event, delete_event
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
@@ -56,3 +56,16 @@ def create_meet(request: CreateMeetRequest):
     if not credentials:
         raise HTTPException(status_code=401, detail="User not authenticated")
     return {"meet_link": create_meet_event(credentials, summary=request.summary, duration_minutes=request.duration_minutes or 60)}
+
+
+@router.delete("/events/{event_id}")
+def delete_calendar_event(event_id: str):
+    """Delete a calendar event by ID"""
+    credentials = get_credentials()
+    if not credentials:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    try:
+        return delete_event(credentials, event_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Event not found or could not be deleted: {str(e)}")

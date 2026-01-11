@@ -118,3 +118,24 @@ def create_meet_event(credentials: Credentials, summary: str, duration_minutes: 
     ).execute()
 
     return event.get("hangoutLink", "No Meet link generated")
+
+
+def delete_event(credentials: Credentials, event_id: str):
+    """Delete a calendar event
+    
+    Args:
+        credentials: Google OAuth credentials
+        event_id: The ID of the event to delete
+    
+    Returns:
+        Success message
+    """
+    service = get_calendar_service(credentials)
+    
+    service.events().delete(
+        calendarId="primary",
+        eventId=event_id,
+        sendUpdates="all"
+    ).execute()
+    
+    return {"message": "Event deleted successfully", "event_id": event_id}
