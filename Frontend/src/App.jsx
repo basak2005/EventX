@@ -390,10 +390,14 @@ const App = () => {
       // Clean URL (remove session_id from URL bar)
       window.history.replaceState({}, document.title, window.location.pathname);
       toast.success('Login successful!');
+      // Small delay to ensure localStorage is set before checking auth
+      setTimeout(() => {
+        checkAuthStatus();
+      }, 100);
+    } else {
+      checkAuthStatus();
     }
-    
-    checkAuthStatus();
-  }, [checkAuthStatus]);
+  }, []); // Remove checkAuthStatus dependency to prevent re-runs
 
   useEffect(() => {
     if (isAuthenticated) {
